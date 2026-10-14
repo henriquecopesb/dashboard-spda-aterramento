@@ -26,6 +26,7 @@ main{max-width:1500px;margin:auto;padding:26px 28px 50px}
 .panel h3{margin:0 0 17px;color:var(--navy2);font-size:17px}.barrow{display:grid;grid-template-columns:125px 1fr 55px;gap:10px;align-items:center;margin:13px 0;font-size:13px}.track{height:12px;background:#edf1f6;border-radius:20px;overflow:hidden}.fill{height:100%;background:var(--navy);border-radius:20px}.fill.red{background:var(--red)}.fill.green{background:var(--green)}.fill.orange{background:var(--orange)}.fill.gray{background:var(--gray)}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}.minecard{background:white;border-radius:16px;padding:20px;border:1px solid var(--line);box-shadow:var(--shadow)}.minecard h3{margin:0 0 15px;color:var(--navy2)}
 .metric{display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px 0;border-bottom:1px solid #eef2f6}.metric:last-child{border:0}.metric b{color:var(--navy2)}
+.filters label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--navy2)}.filters .hint{flex-basis:100%;font-size:12px;color:var(--muted);margin:0}.filters button{align-self:flex-end}.summary-kpis{grid-template-columns:repeat(5,1fr);margin-bottom:18px}
 .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:13px}.filters input,.filters select{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:white;min-width:180px;color:var(--text)}
 .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:white;box-shadow:var(--shadow)}table{width:100%;border-collapse:collapse;min-width:1250px}th{position:sticky;top:0;background:var(--navy2);color:white;text-align:left;font-size:12px;padding:12px}td{padding:11px 12px;border-bottom:1px solid #edf1f5;font-size:12px;vertical-align:top}tr:hover td{background:#f8fafc}
 .badge{display:inline-block;padding:5px 8px;border-radius:20px;font-weight:700;font-size:11px;background:#eef2f7;color:#536071}.badge.done{background:#e5f6ee;color:#15734d}.badge.progress{background:#fff1df;color:#9a5d0a}.badge.pending{background:#ffe9e9;color:#a82224}.badge.na{background:#eef1f5;color:#6e7887}
@@ -60,11 +61,14 @@ main{max-width:1500px;margin:auto;padding:26px 28px 50px}
 
 <div class="section-title">Consulta detalhada das edificações</div>
 <div class="filters">
-<input id="search" placeholder="Pesquisar edificação ou projeto">
-<select id="filterMine"><option value="">Todas as minas</option><option>Água Limpa</option><option>Brucutu</option></select>
-<select id="filterStatus"><option value="">Todos os status</option><option value="Concluído">Concluído</option><option value="Em andamento">Em andamento</option><option value="Não iniciado">Não iniciado</option><option value="Teste pendente">Teste pendente</option></select>
-<select id="filterTestPending"><option value="">Todos os testes</option><option value="sim">Somente com teste pendente</option><option value="nao">Sem teste pendente</option></select>
-<select id="filterPending"><option value="">Todas as pendências</option><option value="sim">Somente com pendência</option><option value="nao">Sem pendência</option></select>
+<label for="search">Pesquisar<input id="search" placeholder="Pesquisar edificação ou projeto"></label>
+<label for="filterMine">Mina<select id="filterMine"><option value="">Todas as minas</option><option>Água Limpa</option><option>Brucutu</option></select></label>
+<label for="filterStatus">Status de execução (Aterramento ou SPDA)<select id="filterStatus"><option value="">Todos os status</option><option value="Concluído">Concluído</option><option value="Em andamento">Em andamento</option><option value="Não iniciado">Não iniciado</option></select></label>
+<label for="filterTestPending">Teste / laudo pendente<select id="filterTestPending"><option value="">Todos os testes</option><option value="sim">Somente com teste pendente</option><option value="nao">Sem teste pendente</option></select></label>
+<label for="filterPending">Pendências registradas<select id="filterPending"><option value="">Todas as pendências</option><option value="sim">Somente com pendência</option><option value="nao">Sem pendência</option></select></label>
+<label for="filterObservations">Observações<select id="filterObservations"><option value="">Todas as observações</option></select></label>
+<button id="clearFilters" class="tab" type="button">Limpar filtros</button>
+<p class="hint">Os filtros são combinados. O status considera Aterramento ou SPDA. Indicadores e tabela refletem a seleção.</p>
 </div>
 <div class="tablewrap"><table><thead><tr>
 <th>Mina</th><th>Edificação</th><th>Projeto</th><th>Aterramento?</th><th>Status Aterramento</th><th>Teste Aterramento</th><th>SPDA?</th><th>Status SPDA</th><th>Teste SPDA</th><th>Pendências</th><th>Observações</th>
@@ -182,6 +186,26 @@ function calc(rows,type){
  const pending=done.filter(r=>!isDone(r[testKey]));
  return {scope:scope.length,done:done.length,progress:progress.length,notStarted:notStarted.length,tested:tested.length,pending:pending.length};
 }
+function completedBuildings(rows){
+ return rows.filter(r=>{
+   const a=yes(r.temAterramento), s=yes(r.temSPDA);
+   return (a||s)&&(!a||isDone(r.statusAterramento))&&(!s||isDone(r.statusSPDA));
+ }).length;
+}
+function completedWithPending(rows){
+ return rows.filter(r=>String(r.pendencias||"").trim()).length;
+}
+function calcReports(rows){
+ const normalized=rows.map(r=>normalizarTextoSeguro(r.observacoes).replace(/\s+/g," "));
+ return {waiting:normalized.filter(v=>v.includes("relatorio de entrega elaborado")&&v.includes("coletar assinatura")).length, signed:normalized.filter(v=>v.includes("relatorio de entrega assinado")).length};
+}
+function escapeOption(v){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function syncObservationOptions(){
+ const select=document.getElementById("filterObservations"), selected=select.value;
+ const values=[...new Set(DATA.map(r=>String(r.observacoes||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+ select.innerHTML='<option value="">Todas as observações</option><option value="__empty__">Sem observação</option>'+values.map(v=>`<option value="${escapeOption(v)}">${escapeOption(v)}</option>`).join("");
+ select.value=selected==="__empty__"||values.includes(selected)?selected:"";
+}
 function kpi(label,val,sub="",cls=""){return `<div class="kpi ${cls}"><div class="label">${label}</div><div class="value">${val}</div><div class="sub">${sub}</div></div>`}
 function bars(title,m){
  const max=Math.max(m.scope,1); return `<div class="panel"><h3>${title}</h3>
@@ -191,12 +215,18 @@ function bars(title,m){
 }
 function bar(label,n,d,cls){return `<div class="barrow"><span>${label}</span><div class="track"><div class="fill ${cls}" style="width:${pct(n,d)}%"></div></div><b>${n} <small>(${pct(n,d)}%)</small></b></div>`}
 function dashboard(rows){
- const A=calc(rows,"A"), S=calc(rows,"S");
- return `<div class="section-title">Resumo das edificações</div><div class="kpis">
- ${kpi("Total de edificações",rows.length,"Base selecionada")}
+ const A=calc(rows,"A"), S=calc(rows,"S"), reports=calcReports(rows);
+ return `<div class="section-title">Resumo das edificações</div><div class="kpis summary-kpis">
+ ${kpi("Total de Edificações (Com Projeto)",rows.filter(r=>String(r.projeto||"").trim()).length,"Base selecionada")}
+ ${kpi("Total de edificações concluídas",completedBuildings(rows),"Aterramento e SPDA aplicáveis concluídos","green")}
+ ${kpi("Relatórios aguardando assinatura",reports.waiting,"Conforme Observações","orange")}
+ ${kpi("Relatórios assinados",reports.signed,"Conforme Observações","green")}
+ ${kpi("Edificações concluídas com pendência",completedWithPending(rows),"Conforme coluna Pendências","orange")}
+ </div><div class="section-title">Aterramento</div><div class="kpis">
  ${kpi("Com aterramento",A.scope,`${pct(A.scope,rows.length)}% do total`)}
  ${kpi("Aterramento concluído",A.done,`${pct(A.done,A.scope)}% do escopo`,"green")}
  ${kpi("Aterramento em andamento",A.progress,`${pct(A.progress,A.scope)}% do escopo`,"orange")}
+ ${kpi("Aterramento não iniciado",A.notStarted,`${pct(A.notStarted,A.scope)}% do escopo`,"gray")}
  ${kpi("Aterramento testado",A.tested,`${pct(A.tested,A.done)}% dos concluídos`,"green")}
  ${kpi("Teste de aterramento pendente",A.pending,`${pct(A.pending,A.done)}% dos concluídos`,"red")}
  </div>
@@ -214,7 +244,7 @@ function compare(rows){
  return `<div class="section-title">Comparativo entre minas</div><div class="compare">${["Água Limpa","Brucutu"].map(m=>{
    const r=rows.filter(x=>x.mina===m),a=calc(r,"A"),s=calc(r,"S");
    return `<div class="minecard"><h3>${m}</h3>
-   ${metric("Total de edificações",r.length)}
+   ${metric("Total de Edificações (Com Projeto)",r.filter(x=>String(x.projeto||"").trim()).length)}
    ${metric("Aterramento concluído",`${a.done} / ${a.scope} (${pct(a.done,a.scope)}%)`)}
    ${metric("Aterramento em andamento",a.progress)}
    ${metric("Aterramento testado",`${a.tested} / ${a.done} (${pct(a.tested,a.done)}%)`)}
@@ -287,6 +317,7 @@ function getFilteredRows(){
  const st=document.getElementById("filterStatus").value;
  const testPending=document.getElementById("filterTestPending").value;
  const hasPending=document.getElementById("filterPending").value;
+ const observation=document.getElementById("filterObservations").value;
 
  let rows=DATA.slice();
 
@@ -299,6 +330,7 @@ function getFilteredRows(){
  }
 
  rows=rows.filter(r=>statusMatch(r,st));
+ if(observation){rows=rows.filter(r=>observation==="__empty__"?!String(r.observacoes||"").trim():String(r.observacoes||"").trim()===observation); }
 
  if(testPending==="sim"){
    rows=rows.filter(r=>
@@ -332,6 +364,7 @@ function renderTable(rows){
 }
 
 function render(){
+ syncObservationOptions();
  const rows=getFilteredRows();
 
  if(currentView==="Pendências"){
@@ -368,7 +401,7 @@ document.querySelectorAll(".tab[data-view]").forEach(b=>b.onclick=()=>{
 });
 
 document.getElementById("search").addEventListener("input",render);
-["filterStatus","filterTestPending","filterPending"].forEach(id=>{
+["filterStatus","filterTestPending","filterPending","filterObservations"].forEach(id=>{
  document.getElementById(id).addEventListener("change",render);
 });
 
@@ -383,6 +416,12 @@ document.getElementById("filterMine").addEventListener("change",()=>{
    });
  }
 
+ render();
+});
+document.getElementById("clearFilters").addEventListener("click",()=>{
+ ["search","filterMine","filterStatus","filterTestPending","filterPending","filterObservations"].forEach(id=>document.getElementById(id).value="");
+ currentView=currentView==="Pendências"?"Pendências":"Geral";
+ document.querySelectorAll(".tab[data-view]").forEach(x=>x.classList.toggle("active",x.dataset.view===currentView));
  render();
 });
 document.getElementById("refreshData").addEventListener("click",loadGoogleSheets);
